@@ -269,7 +269,7 @@ export const api = {
 	},
 
 	putItem(table: string, item: Record<string, unknown>): Promise<void> {
-		return apiPost(`/api/tables/${encodeURIComponent(table)}/items`, { item });
+		return apiPut(`/api/tables/${encodeURIComponent(table)}/items`, { item });
 	},
 
 	deleteItem(table: string, key: Record<string, unknown>): Promise<void> {
