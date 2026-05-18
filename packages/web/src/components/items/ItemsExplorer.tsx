@@ -365,6 +365,7 @@ export function ItemsExplorer({
 	}, [mode, performScan]);
 
 	// Clear selection when displayed items change
+	// biome-ignore lint/correctness/useExhaustiveDependencies: deps are triggers for clearing selection
 	useEffect(() => {
 		setSelectedKeys(new Set());
 	}, [pageIndex, sortColumn, sortDirection, pages]);
@@ -798,7 +799,6 @@ export function ItemsExplorer({
 										)}
 										{/* Resize handle */}
 										<div
-											role="separator"
 											className="absolute right-0 top-0 h-full w-1.5 -translate-x-px cursor-col-resize bg-transparent group-hover:bg-primary/30 active:bg-primary/50"
 											onMouseDown={(e) => handleResizeStart(col, e)}
 										/>

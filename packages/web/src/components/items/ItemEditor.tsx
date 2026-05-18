@@ -114,6 +114,7 @@ export function ItemEditor({
 	}, []);
 
 	// Initialize editor content when dialog opens
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-init only on open/mode/item change, not format
 	useEffect(() => {
 		if (!open) return;
 		setJsonError(null);
@@ -129,8 +130,6 @@ export function ItemEditor({
 			}
 			setEditorValue(formatItem(template, format));
 		}
-		// Only re-init on open/mode/item change, not format
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open, mode, item, tableDescription]);
 
 	// Convert content when format toggle changes
