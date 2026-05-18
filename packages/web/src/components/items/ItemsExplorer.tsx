@@ -33,15 +33,17 @@ import type {
 } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
+	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
+	ChevronUp,
 	Copy,
 	Plus,
 	RefreshCw,
 	Search,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ItemEditor } from "./ItemEditor";
 
@@ -142,19 +144,35 @@ function getKeyForItem(
 	return key;
 }
 
+type SortDirection = "asc" | "desc";
+
+function compareValues(a: unknown, b: unknown): number {
+	if (a == null && b == null) return 0;
+	if (a == null) return 1;
+	if (b == null) return -1;
+	if (typeof a === "number" && typeof b === "number") return a - b;
+	if (typeof a === "boolean" && typeof b === "boolean")
+		return (a ? 1 : 0) - (b ? 1 : 0);
+	const aStr = typeof a === "string" ? a : JSON.stringify(a);
+	const bStr = typeof b === "string" ? b : JSON.stringify(b);
+	if (aStr < bStr) return -1;
+	if (aStr > bStr) return 1;
+	return 0;
+}
+
 export function ItemsExplorer({
 	tableName,
 	tableDescription,
 }: ItemsExplorerProps) {
 	const [mode, setMode] = useState<Mode>("scan");
-	const [items, setItems] = useState<Record<string, unknown>[]>([]);
+	const [pages, setPages] = useState<Record<string, unknown>[][]>([]);
+	const [pageIndex, setPageIndex] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [lastEvaluatedKey, setLastEvaluatedKey] = useState<
 		Record<string, unknown> | undefined
 	>();
-	const [keyStack, setKeyStack] = useState<
-		(Record<string, unknown> | undefined)[]
-	>([]);
+	const [sortColumn, setSortColumn] = useState<string | null>(null);
+	const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 	const [selectedKeys, setSelectedKeys] = useState<Set<number>>(new Set());
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [batchDeleting, setBatchDeleting] = useState(false);
@@ -220,9 +238,14 @@ export function ItemsExplorer({
 					limit: 25,
 					exclusiveStartKey: startKey,
 				});
-				setItems(result.items);
+				if (startKey === undefined) {
+					setPages([result.items]);
+					setPageIndex(0);
+					setSortColumn(null);
+				} else {
+					setPages((prev) => [...prev, result.items]);
+				}
 				setLastEvaluatedKey(result.lastEvaluatedKey);
-				setSelectedKeys(new Set());
 			} catch (err) {
 				toast.error(
 					`Scan failed: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -298,9 +321,14 @@ export function ItemsExplorer({
 				}
 
 				const result = await api.queryItems(tableName, params);
-				setItems(result.items);
+				if (startKey === undefined) {
+					setPages([result.items]);
+					setPageIndex(0);
+					setSortColumn(null);
+				} else {
+					setPages((prev) => [...prev, result.items]);
+				}
 				setLastEvaluatedKey(result.lastEvaluatedKey);
-				setSelectedKeys(new Set());
 			} catch (err) {
 				toast.error(
 					`Query failed: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -323,13 +351,16 @@ export function ItemsExplorer({
 	// Load initial data
 	useEffect(() => {
 		if (mode === "scan") {
-			setKeyStack([]);
 			performScan();
 		}
 	}, [mode, performScan]);
 
+	// Clear selection when displayed items change
+	useEffect(() => {
+		setSelectedKeys(new Set());
+	}, [pageIndex, sortColumn, sortDirection, pages]);
+
 	const handleRefresh = () => {
-		setKeyStack([]);
 		if (mode === "scan") {
 			performScan();
 		} else {
@@ -337,28 +368,60 @@ export function ItemsExplorer({
 		}
 	};
 
-	const handleNextPage = () => {
-		if (!lastEvaluatedKey) return;
-		setKeyStack((prev) => [...prev, lastEvaluatedKey]);
-		if (mode === "scan") {
-			performScan(lastEvaluatedKey);
+	const handleSort = (col: string) => {
+		if (sortColumn === col) {
+			setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
 		} else {
-			performQuery(lastEvaluatedKey);
+			setSortColumn(col);
+			setSortDirection("asc");
 		}
+		setPageIndex(0);
+	};
+
+	const sortedItems = useMemo(() => {
+		if (sortColumn === null) return null;
+		const all = pages.flat();
+		all.sort((a, b) => {
+			const cmp = compareValues(a[sortColumn], b[sortColumn]);
+			return sortDirection === "asc" ? cmp : -cmp;
+		});
+		return all;
+	}, [pages, sortColumn, sortDirection]);
+
+	const pageSize = pages[0]?.length ?? 25;
+	const totalLoadedItems = useMemo(
+		() => pages.reduce((sum, p) => sum + p.length, 0),
+		[pages],
+	);
+	const totalLoadedPages = sortedItems
+		? Math.max(1, Math.ceil(totalLoadedItems / pageSize))
+		: Math.max(1, pages.length);
+
+	const items: Record<string, unknown>[] = sortedItems
+		? sortedItems.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+		: (pages[pageIndex] ?? []);
+
+	const canGoNextLoaded = pageIndex + 1 < totalLoadedPages;
+	const canGoNext = canGoNextLoaded || !!lastEvaluatedKey;
+	const canGoPrevious = pageIndex > 0;
+
+	const handleNextPage = async () => {
+		if (canGoNextLoaded) {
+			setPageIndex(pageIndex + 1);
+			return;
+		}
+		if (!lastEvaluatedKey) return;
+		if (mode === "scan") {
+			await performScan(lastEvaluatedKey);
+		} else {
+			await performQuery(lastEvaluatedKey);
+		}
+		setPageIndex((p) => p + 1);
 	};
 
 	const handlePreviousPage = () => {
-		if (keyStack.length === 0) return;
-		const newStack = [...keyStack];
-		newStack.pop(); // remove current
-		const previousKey =
-			newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
-		setKeyStack(newStack);
-		if (mode === "scan") {
-			performScan(previousKey);
-		} else {
-			performQuery(previousKey);
-		}
+		if (!canGoPrevious) return;
+		setPageIndex(pageIndex - 1);
 	};
 
 	const handleCreateItem = () => {
@@ -423,15 +486,19 @@ export function ItemsExplorer({
 		}
 	};
 
-	// Detect columns from items
-	const columns = Array.from(
-		items.reduce<Set<string>>((cols, item) => {
-			for (const key of Object.keys(item)) {
-				cols.add(key);
+	// Detect columns from all loaded items so the column set stays stable
+	// as you paginate or change sort.
+	const columns = useMemo(() => {
+		const set = new Set<string>();
+		for (const page of pages) {
+			for (const item of page) {
+				for (const key of Object.keys(item)) {
+					set.add(key);
+				}
 			}
-			return cols;
-		}, new Set()),
-	);
+		}
+		return Array.from(set);
+	}, [pages]);
 
 	// Put key columns first
 	const keyNames =
@@ -605,10 +672,7 @@ export function ItemsExplorer({
 					<Button
 						size="sm"
 						className="gap-1.5"
-						onClick={() => {
-							setKeyStack([]);
-							performQuery();
-						}}
+						onClick={() => performQuery()}
 					>
 						<Search className="size-3.5" />
 						Run Query
@@ -683,18 +747,34 @@ export function ItemsExplorer({
 								{sortedColumns.map((col) => (
 									<TableHead
 										key={col}
-										className="group relative overflow-hidden border-r border-border/50"
+										className="group relative overflow-hidden border-r border-border/50 p-0"
 										style={{ width: columnWidths[col] ?? 150, maxWidth: columnWidths[col] ?? 150 }}
 									>
-										<span
-											className={cn(
-												"block truncate font-mono text-xs pr-2",
-												keyNames.includes(col) && "font-semibold",
-											)}
+										<button
+											type="button"
+											onClick={() => handleSort(col)}
+											className="flex h-10 w-full items-center px-2 text-left hover:bg-muted/40"
 										>
-											{col}
-											{keyNames.includes(col) && " *"}
-										</span>
+											<span
+												className={cn(
+													"block flex-1 truncate font-mono text-xs",
+													sortColumn === col ? "pr-6" : "pr-3",
+													keyNames.includes(col) && "font-semibold",
+												)}
+											>
+												{col}
+												{keyNames.includes(col) && " *"}
+											</span>
+										</button>
+										{sortColumn === col && (
+											<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+												{sortDirection === "asc" ? (
+													<ChevronUp className="size-3.5" />
+												) : (
+													<ChevronDown className="size-3.5" />
+												)}
+											</span>
+										)}
 										{/* Resize handle */}
 										<div
 											role="separator"
@@ -761,20 +841,20 @@ export function ItemsExplorer({
 					variant="outline"
 					size="sm"
 					className="gap-1.5"
-					disabled={keyStack.length === 0}
+					disabled={!canGoPrevious}
 					onClick={handlePreviousPage}
 				>
 					<ChevronLeft className="size-3.5" />
 					Previous
 				</Button>
 				<span className="text-xs text-muted-foreground">
-					Page {keyStack.length + 1}
+					Page {pageIndex + 1}
 				</span>
 				<Button
 					variant="outline"
 					size="sm"
 					className="gap-1.5"
-					disabled={!lastEvaluatedKey}
+					disabled={!canGoNext || loading}
 					onClick={handleNextPage}
 				>
 					Next
