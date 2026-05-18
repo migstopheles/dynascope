@@ -1,3 +1,4 @@
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -7,7 +8,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,17 +25,18 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { PAGE_SIZES, usePageSize } from "@/hooks/use-page-size";
+import {
+	formatHumanTimestamp,
+	isTimestampColumn,
+	useTimestampFormat,
+} from "@/hooks/use-timestamp-format";
 import { api } from "@/lib/api-client";
 import type {
 	QueryParams,
 	ScanResult,
 	TableDescription,
 } from "@/lib/api-client";
-import {
-	formatHumanTimestamp,
-	isTimestampColumn,
-	useTimestampFormat,
-} from "@/hooks/use-timestamp-format";
 import { cn } from "@/lib/utils";
 import {
 	ChevronDown,
@@ -170,6 +171,7 @@ export function ItemsExplorer({
 	tableDescription,
 }: ItemsExplorerProps) {
 	const { format: timestampFormat } = useTimestampFormat();
+	const { pageSize, setPageSize } = usePageSize();
 	const [mode, setMode] = useState<Mode>("scan");
 	const [pages, setPages] = useState<Record<string, unknown>[][]>([]);
 	const [pageIndex, setPageIndex] = useState(0);
@@ -241,7 +243,7 @@ export function ItemsExplorer({
 			setLoading(true);
 			try {
 				const result = await api.scanItems(tableName, {
-					limit: 25,
+					limit: pageSize,
 					exclusiveStartKey: startKey,
 				});
 				if (startKey === undefined) {
@@ -260,7 +262,7 @@ export function ItemsExplorer({
 				setLoading(false);
 			}
 		},
-		[tableName],
+		[tableName, pageSize],
 	);
 
 	const performQuery = useCallback(
@@ -318,7 +320,7 @@ export function ItemsExplorer({
 					keyConditionExpression,
 					expressionAttributeValues,
 					expressionAttributeNames,
-					limit: 25,
+					limit: pageSize,
 					exclusiveStartKey: startKey,
 				};
 
@@ -351,6 +353,7 @@ export function ItemsExplorer({
 			sortKeyValue,
 			sortKeyValue2,
 			selectedIndex,
+			pageSize,
 		],
 	);
 
@@ -394,7 +397,6 @@ export function ItemsExplorer({
 		return all;
 	}, [pages, sortColumn, sortDirection]);
 
-	const pageSize = pages[0]?.length ?? 25;
 	const totalLoadedItems = useMemo(
 		() => pages.reduce((sum, p) => sum + p.length, 0),
 		[pages],
@@ -683,11 +685,7 @@ export function ItemsExplorer({
 						</div>
 					)}
 
-					<Button
-						size="sm"
-						className="gap-1.5"
-						onClick={() => performQuery()}
-					>
+					<Button size="sm" className="gap-1.5" onClick={() => performQuery()}>
 						<Search className="size-3.5" />
 						Run Query
 					</Button>
@@ -745,7 +743,13 @@ export function ItemsExplorer({
 				</div>
 			) : (
 				<div className="overflow-x-auto rounded-lg border">
-					<Table style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
+					<Table
+						style={{
+							tableLayout: "fixed",
+							width: "max-content",
+							minWidth: "100%",
+						}}
+					>
 						<TableHeader>
 							<TableRow>
 								<TableHead className="w-10" style={{ width: 40 }}>
@@ -762,7 +766,10 @@ export function ItemsExplorer({
 									<TableHead
 										key={col}
 										className="group relative overflow-hidden border-r border-border/50 p-0"
-										style={{ width: columnWidths[col] ?? 150, maxWidth: columnWidths[col] ?? 150 }}
+										style={{
+											width: columnWidths[col] ?? 150,
+											maxWidth: columnWidths[col] ?? 150,
+										}}
 									>
 										<button
 											type="button"
@@ -825,9 +832,14 @@ export function ItemsExplorer({
 										<TableCell
 											key={col}
 											className="group/cell relative overflow-hidden font-mono text-xs"
-											style={{ width: columnWidths[col] ?? 150, maxWidth: columnWidths[col] ?? 150 }}
+											style={{
+												width: columnWidths[col] ?? 150,
+												maxWidth: columnWidths[col] ?? 150,
+											}}
 										>
-											<span className="block truncate pr-5">{formatCellDisplay(item[col], col)}</span>
+											<span className="block truncate pr-5">
+												{formatCellDisplay(item[col], col)}
+											</span>
 											<button
 												type="button"
 												className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/cell:opacity-100"
@@ -861,9 +873,35 @@ export function ItemsExplorer({
 					<ChevronLeft className="size-3.5" />
 					Previous
 				</Button>
-				<span className="text-xs text-muted-foreground">
-					Page {pageIndex + 1}
-				</span>
+				<div className="flex items-center gap-3">
+					<span className="text-xs text-muted-foreground">
+						Page {pageIndex + 1}
+					</span>
+					<div className="flex items-center gap-1.5">
+						<Label className="text-xs text-muted-foreground">Page size</Label>
+						<Select
+							value={String(pageSize)}
+							onValueChange={(v) => {
+								if (v === null) return;
+								setPageSize(Number(v) as (typeof PAGE_SIZES)[number]);
+								setPages([]);
+								setPageIndex(0);
+								setLastEvaluatedKey(undefined);
+							}}
+						>
+							<SelectTrigger className="h-8 w-20">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{PAGE_SIZES.map((s) => (
+									<SelectItem key={s} value={String(s)}>
+										{s}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				</div>
 				<Button
 					variant="outline"
 					size="sm"

@@ -38,7 +38,9 @@ export function useTheme() {
 	}, [theme]);
 
 	const cycleTheme = useCallback(() => {
-		setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light");
+		setTheme(
+			theme === "light" ? "dark" : theme === "dark" ? "system" : "light",
+		);
 	}, [theme, setTheme]);
 
 	return { theme, setTheme, cycleTheme };

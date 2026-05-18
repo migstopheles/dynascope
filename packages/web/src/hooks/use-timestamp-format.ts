@@ -10,7 +10,9 @@ function readStored(): TimestampFormat {
 }
 
 export function useTimestampFormat() {
-	const [format, setFormatState] = useState<TimestampFormat>(() => readStored());
+	const [format, setFormatState] = useState<TimestampFormat>(() =>
+		readStored(),
+	);
 
 	const setFormat = useCallback((f: TimestampFormat) => {
 		setFormatState(f);

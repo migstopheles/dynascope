@@ -217,11 +217,7 @@ export function Shell({ children }: ShellProps) {
 						<Tooltip>
 							<TooltipTrigger
 								render={
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										onClick={cycleTheme}
-									/>
+									<Button variant="ghost" size="icon-sm" onClick={cycleTheme} />
 								}
 							>
 								{theme === "light" ? (
@@ -232,9 +228,7 @@ export function Shell({ children }: ShellProps) {
 									<Monitor className="size-4" />
 								)}
 							</TooltipTrigger>
-							<TooltipContent>
-								Theme: {theme} (click to cycle)
-							</TooltipContent>
+							<TooltipContent>Theme: {theme} (click to cycle)</TooltipContent>
 						</Tooltip>
 					</div>
 				</div>

@@ -9,11 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api-client";
 import type { TableDescription } from "@/lib/api-client";
-import {
-	fromDynamoItem,
-	isDynamoItem,
-	toDynamoItem,
-} from "@/lib/dynamo-json";
+import { fromDynamoItem, isDynamoItem, toDynamoItem } from "@/lib/dynamo-json";
 import Editor from "@monaco-editor/react";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -45,10 +41,7 @@ function getKeyForItem(
 	return key;
 }
 
-function formatItem(
-	item: Record<string, unknown>,
-	format: JsonFormat,
-): string {
+function formatItem(item: Record<string, unknown>, format: JsonFormat): string {
 	if (format === "dynamodb") {
 		return JSON.stringify(toDynamoItem(item), null, 2);
 	}
@@ -255,9 +248,7 @@ export function ItemEditor({
 					/>
 				</div>
 
-				{jsonError && (
-					<p className="text-xs text-destructive">{jsonError}</p>
-				)}
+				{jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
 
 				<DialogFooter>
 					{mode === "edit" && (
