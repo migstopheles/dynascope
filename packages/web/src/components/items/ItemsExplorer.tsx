@@ -31,6 +31,11 @@ import type {
 	ScanResult,
 	TableDescription,
 } from "@/lib/api-client";
+import {
+	formatHumanTimestamp,
+	isTimestampColumn,
+	useTimestampFormat,
+} from "@/hooks/use-timestamp-format";
 import { cn } from "@/lib/utils";
 import {
 	ChevronDown,
@@ -164,6 +169,7 @@ export function ItemsExplorer({
 	tableName,
 	tableDescription,
 }: ItemsExplorerProps) {
+	const { format: timestampFormat } = useTimestampFormat();
 	const [mode, setMode] = useState<Mode>("scan");
 	const [pages, setPages] = useState<Record<string, unknown>[][]>([]);
 	const [pageIndex, setPageIndex] = useState(0);
@@ -516,6 +522,14 @@ export function ItemsExplorer({
 		return JSON.stringify(value);
 	};
 
+	const formatCellDisplay = (value: unknown, col: string): string => {
+		if (timestampFormat === "human" && isTimestampColumn(col)) {
+			const human = formatHumanTimestamp(value);
+			if (human !== null) return human;
+		}
+		return formatCellValue(value);
+	};
+
 	// Column resizing
 	const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 	const resizingRef = useRef<{
@@ -813,7 +827,7 @@ export function ItemsExplorer({
 											className="group/cell relative overflow-hidden font-mono text-xs"
 											style={{ width: columnWidths[col] ?? 150, maxWidth: columnWidths[col] ?? 150 }}
 										>
-											<span className="block truncate pr-5">{formatCellValue(item[col])}</span>
+											<span className="block truncate pr-5">{formatCellDisplay(item[col], col)}</span>
 											<button
 												type="button"
 												className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/cell:opacity-100"
