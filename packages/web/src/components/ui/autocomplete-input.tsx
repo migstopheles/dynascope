@@ -122,7 +122,7 @@ export function AutocompleteInput({
 								type="button"
 								data-item
 								className={cn(
-									"flex w-full items-center rounded-sm px-2 py-1.5 text-left font-mono text-xs transition-colors",
+									"flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-left font-mono text-xs transition-colors",
 									i === focusIndex
 										? "bg-accent text-accent-foreground"
 										: "hover:bg-muted",

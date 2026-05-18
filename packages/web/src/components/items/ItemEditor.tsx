@@ -208,7 +208,7 @@ export function ItemEditor({
 				<div className="flex items-center gap-1 rounded-md border p-0.5 w-fit">
 					<button
 						type="button"
-						className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+						className={`cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors ${
 							format === "plain"
 								? "bg-primary text-primary-foreground"
 								: "text-muted-foreground hover:text-foreground"
@@ -219,7 +219,7 @@ export function ItemEditor({
 					</button>
 					<button
 						type="button"
-						className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+						className={`cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors ${
 							format === "dynamodb"
 								? "bg-primary text-primary-foreground"
 								: "text-muted-foreground hover:text-foreground"

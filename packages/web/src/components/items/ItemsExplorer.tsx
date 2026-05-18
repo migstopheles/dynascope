@@ -741,7 +741,7 @@ export function ItemsExplorer({
 											selectedKeys.size === items.length && items.length > 0
 										}
 										onChange={handleToggleSelectAll}
-										className="size-4 rounded border-input accent-primary"
+										className="size-4 cursor-pointer rounded border-input accent-primary"
 									/>
 								</TableHead>
 								{sortedColumns.map((col) => (
@@ -753,7 +753,7 @@ export function ItemsExplorer({
 										<button
 											type="button"
 											onClick={() => handleSort(col)}
-											className="flex h-10 w-full items-center px-2 text-left hover:bg-muted/40"
+											className="flex h-10 w-full cursor-pointer items-center px-2 text-left hover:bg-muted/40"
 										>
 											<span
 												className={cn(
@@ -804,7 +804,7 @@ export function ItemsExplorer({
 											type="checkbox"
 											checked={selectedKeys.has(index)}
 											onChange={() => handleToggleSelect(index)}
-											className="size-4 rounded border-input accent-primary"
+											className="size-4 cursor-pointer rounded border-input accent-primary"
 										/>
 									</TableCell>
 									{sortedColumns.map((col) => (
@@ -816,7 +816,7 @@ export function ItemsExplorer({
 											<span className="block truncate pr-5">{formatCellValue(item[col])}</span>
 											<button
 												type="button"
-												className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/cell:opacity-100"
+												className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/cell:opacity-100"
 												onClick={(e) => {
 													e.stopPropagation();
 													const val = formatCellValue(item[col]);
