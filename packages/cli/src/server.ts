@@ -17,9 +17,7 @@ export async function startServer(config: ServerConfig): Promise<void> {
 	const { port } = config;
 
 	const staticRoot = path.join(dirname, "static");
-	const hasStaticFiles = fs.existsSync(
-		path.join(staticRoot, "index.html"),
-	);
+	const hasStaticFiles = fs.existsSync(path.join(staticRoot, "index.html"));
 
 	const app = new Hono();
 
@@ -65,7 +63,9 @@ export async function startServer(config: ServerConfig): Promise<void> {
 			console.log("");
 			console.log(`  > Local: ${url}`);
 			if (!hasStaticFiles) {
-				console.log("  > UI: http://localhost:5173 (run npm run dev -w @dynascope/web)");
+				console.log(
+					"  > UI: http://localhost:5173 (run npm run dev -w @dynascope/web)",
+				);
 			}
 			console.log("");
 		},

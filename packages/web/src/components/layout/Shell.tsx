@@ -9,11 +9,14 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useTheme } from "@/hooks/use-theme";
+import { useTimestampFormat } from "@/hooks/use-timestamp-format";
 import { api } from "@/lib/api-client";
 import type { TableSummary } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
+	CalendarClock,
 	Database,
+	Hash,
 	Monitor,
 	Moon,
 	PanelLeft,
@@ -37,6 +40,8 @@ export function Shell({ children }: ShellProps) {
 	const [createDialogOpen, setCreateDialogOpen] = useState(false);
 	const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
 	const { theme, cycleTheme } = useTheme();
+	const { format: timestampFormat, toggleFormat: toggleTimestampFormat } =
+		useTimestampFormat();
 	const location = useLocation();
 
 	const fetchTables = useCallback(async () => {
@@ -188,28 +193,44 @@ export function Shell({ children }: ShellProps) {
 							{sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
 						</TooltipContent>
 					</Tooltip>
-					<Tooltip>
-						<TooltipTrigger
-							render={
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									onClick={cycleTheme}
-								/>
-							}
-						>
-							{theme === "light" ? (
-								<Sun className="size-4" />
-							) : theme === "dark" ? (
-								<Moon className="size-4" />
-							) : (
-								<Monitor className="size-4" />
-							)}
-						</TooltipTrigger>
-						<TooltipContent>
-							Theme: {theme} (click to cycle)
-						</TooltipContent>
-					</Tooltip>
+					<div className="flex items-center gap-1">
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										onClick={toggleTimestampFormat}
+									/>
+								}
+							>
+								{timestampFormat === "human" ? (
+									<CalendarClock className="size-4" />
+								) : (
+									<Hash className="size-4" />
+								)}
+							</TooltipTrigger>
+							<TooltipContent>
+								Timestamps: {timestampFormat} (click to toggle)
+							</TooltipContent>
+						</Tooltip>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Button variant="ghost" size="icon-sm" onClick={cycleTheme} />
+								}
+							>
+								{theme === "light" ? (
+									<Sun className="size-4" />
+								) : theme === "dark" ? (
+									<Moon className="size-4" />
+								) : (
+									<Monitor className="size-4" />
+								)}
+							</TooltipTrigger>
+							<TooltipContent>Theme: {theme} (click to cycle)</TooltipContent>
+						</Tooltip>
+					</div>
 				</div>
 
 				{/* Page content */}

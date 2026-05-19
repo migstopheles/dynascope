@@ -9,11 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api-client";
 import type { TableDescription } from "@/lib/api-client";
-import {
-	fromDynamoItem,
-	isDynamoItem,
-	toDynamoItem,
-} from "@/lib/dynamo-json";
+import { fromDynamoItem, isDynamoItem, toDynamoItem } from "@/lib/dynamo-json";
 import Editor from "@monaco-editor/react";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -45,10 +41,7 @@ function getKeyForItem(
 	return key;
 }
 
-function formatItem(
-	item: Record<string, unknown>,
-	format: JsonFormat,
-): string {
+function formatItem(item: Record<string, unknown>, format: JsonFormat): string {
 	if (format === "dynamodb") {
 		return JSON.stringify(toDynamoItem(item), null, 2);
 	}
@@ -121,6 +114,7 @@ export function ItemEditor({
 	}, []);
 
 	// Initialize editor content when dialog opens
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-init only on open/mode/item change, not format
 	useEffect(() => {
 		if (!open) return;
 		setJsonError(null);
@@ -136,8 +130,6 @@ export function ItemEditor({
 			}
 			setEditorValue(formatItem(template, format));
 		}
-		// Only re-init on open/mode/item change, not format
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open, mode, item, tableDescription]);
 
 	// Convert content when format toggle changes
@@ -208,7 +200,7 @@ export function ItemEditor({
 				<div className="flex items-center gap-1 rounded-md border p-0.5 w-fit">
 					<button
 						type="button"
-						className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+						className={`cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors ${
 							format === "plain"
 								? "bg-primary text-primary-foreground"
 								: "text-muted-foreground hover:text-foreground"
@@ -219,7 +211,7 @@ export function ItemEditor({
 					</button>
 					<button
 						type="button"
-						className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+						className={`cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors ${
 							format === "dynamodb"
 								? "bg-primary text-primary-foreground"
 								: "text-muted-foreground hover:text-foreground"
@@ -255,9 +247,7 @@ export function ItemEditor({
 					/>
 				</div>
 
-				{jsonError && (
-					<p className="text-xs text-destructive">{jsonError}</p>
-				)}
+				{jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
 
 				<DialogFooter>
 					{mode === "edit" && (

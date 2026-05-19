@@ -1,3 +1,4 @@
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -7,7 +8,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,6 +25,12 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { PAGE_SIZES, usePageSize } from "@/hooks/use-page-size";
+import {
+	formatHumanTimestamp,
+	isTimestampColumn,
+	useTimestampFormat,
+} from "@/hooks/use-timestamp-format";
 import { api } from "@/lib/api-client";
 import type {
 	QueryParams,
@@ -33,15 +39,17 @@ import type {
 } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
+	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
+	ChevronUp,
 	Copy,
 	Plus,
 	RefreshCw,
 	Search,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ItemEditor } from "./ItemEditor";
 
@@ -142,19 +150,37 @@ function getKeyForItem(
 	return key;
 }
 
+type SortDirection = "asc" | "desc";
+
+function compareValues(a: unknown, b: unknown): number {
+	if (a == null && b == null) return 0;
+	if (a == null) return 1;
+	if (b == null) return -1;
+	if (typeof a === "number" && typeof b === "number") return a - b;
+	if (typeof a === "boolean" && typeof b === "boolean")
+		return (a ? 1 : 0) - (b ? 1 : 0);
+	const aStr = typeof a === "string" ? a : JSON.stringify(a);
+	const bStr = typeof b === "string" ? b : JSON.stringify(b);
+	if (aStr < bStr) return -1;
+	if (aStr > bStr) return 1;
+	return 0;
+}
+
 export function ItemsExplorer({
 	tableName,
 	tableDescription,
 }: ItemsExplorerProps) {
+	const { format: timestampFormat } = useTimestampFormat();
+	const { pageSize, setPageSize } = usePageSize();
 	const [mode, setMode] = useState<Mode>("scan");
-	const [items, setItems] = useState<Record<string, unknown>[]>([]);
+	const [pages, setPages] = useState<Record<string, unknown>[][]>([]);
+	const [pageIndex, setPageIndex] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [lastEvaluatedKey, setLastEvaluatedKey] = useState<
 		Record<string, unknown> | undefined
 	>();
-	const [keyStack, setKeyStack] = useState<
-		(Record<string, unknown> | undefined)[]
-	>([]);
+	const [sortColumn, setSortColumn] = useState<string | null>(null);
+	const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 	const [selectedKeys, setSelectedKeys] = useState<Set<number>>(new Set());
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [batchDeleting, setBatchDeleting] = useState(false);
@@ -217,12 +243,17 @@ export function ItemsExplorer({
 			setLoading(true);
 			try {
 				const result = await api.scanItems(tableName, {
-					limit: 25,
+					limit: pageSize,
 					exclusiveStartKey: startKey,
 				});
-				setItems(result.items);
+				if (startKey === undefined) {
+					setPages([result.items]);
+					setPageIndex(0);
+					setSortColumn(null);
+				} else {
+					setPages((prev) => [...prev, result.items]);
+				}
 				setLastEvaluatedKey(result.lastEvaluatedKey);
-				setSelectedKeys(new Set());
 			} catch (err) {
 				toast.error(
 					`Scan failed: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -231,7 +262,7 @@ export function ItemsExplorer({
 				setLoading(false);
 			}
 		},
-		[tableName],
+		[tableName, pageSize],
 	);
 
 	const performQuery = useCallback(
@@ -289,7 +320,7 @@ export function ItemsExplorer({
 					keyConditionExpression,
 					expressionAttributeValues,
 					expressionAttributeNames,
-					limit: 25,
+					limit: pageSize,
 					exclusiveStartKey: startKey,
 				};
 
@@ -298,9 +329,14 @@ export function ItemsExplorer({
 				}
 
 				const result = await api.queryItems(tableName, params);
-				setItems(result.items);
+				if (startKey === undefined) {
+					setPages([result.items]);
+					setPageIndex(0);
+					setSortColumn(null);
+				} else {
+					setPages((prev) => [...prev, result.items]);
+				}
 				setLastEvaluatedKey(result.lastEvaluatedKey);
-				setSelectedKeys(new Set());
 			} catch (err) {
 				toast.error(
 					`Query failed: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -317,19 +353,24 @@ export function ItemsExplorer({
 			sortKeyValue,
 			sortKeyValue2,
 			selectedIndex,
+			pageSize,
 		],
 	);
 
 	// Load initial data
 	useEffect(() => {
 		if (mode === "scan") {
-			setKeyStack([]);
 			performScan();
 		}
 	}, [mode, performScan]);
 
+	// Clear selection when displayed items change
+	// biome-ignore lint/correctness/useExhaustiveDependencies: deps are triggers for clearing selection
+	useEffect(() => {
+		setSelectedKeys(new Set());
+	}, [pageIndex, sortColumn, sortDirection, pages]);
+
 	const handleRefresh = () => {
-		setKeyStack([]);
 		if (mode === "scan") {
 			performScan();
 		} else {
@@ -337,28 +378,59 @@ export function ItemsExplorer({
 		}
 	};
 
-	const handleNextPage = () => {
-		if (!lastEvaluatedKey) return;
-		setKeyStack((prev) => [...prev, lastEvaluatedKey]);
-		if (mode === "scan") {
-			performScan(lastEvaluatedKey);
+	const handleSort = (col: string) => {
+		if (sortColumn === col) {
+			setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
 		} else {
-			performQuery(lastEvaluatedKey);
+			setSortColumn(col);
+			setSortDirection("asc");
 		}
+		setPageIndex(0);
+	};
+
+	const sortedItems = useMemo(() => {
+		if (sortColumn === null) return null;
+		const all = pages.flat();
+		all.sort((a, b) => {
+			const cmp = compareValues(a[sortColumn], b[sortColumn]);
+			return sortDirection === "asc" ? cmp : -cmp;
+		});
+		return all;
+	}, [pages, sortColumn, sortDirection]);
+
+	const totalLoadedItems = useMemo(
+		() => pages.reduce((sum, p) => sum + p.length, 0),
+		[pages],
+	);
+	const totalLoadedPages = sortedItems
+		? Math.max(1, Math.ceil(totalLoadedItems / pageSize))
+		: Math.max(1, pages.length);
+
+	const items: Record<string, unknown>[] = sortedItems
+		? sortedItems.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+		: (pages[pageIndex] ?? []);
+
+	const canGoNextLoaded = pageIndex + 1 < totalLoadedPages;
+	const canGoNext = canGoNextLoaded || !!lastEvaluatedKey;
+	const canGoPrevious = pageIndex > 0;
+
+	const handleNextPage = async () => {
+		if (canGoNextLoaded) {
+			setPageIndex(pageIndex + 1);
+			return;
+		}
+		if (!lastEvaluatedKey) return;
+		if (mode === "scan") {
+			await performScan(lastEvaluatedKey);
+		} else {
+			await performQuery(lastEvaluatedKey);
+		}
+		setPageIndex((p) => p + 1);
 	};
 
 	const handlePreviousPage = () => {
-		if (keyStack.length === 0) return;
-		const newStack = [...keyStack];
-		newStack.pop(); // remove current
-		const previousKey =
-			newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
-		setKeyStack(newStack);
-		if (mode === "scan") {
-			performScan(previousKey);
-		} else {
-			performQuery(previousKey);
-		}
+		if (!canGoPrevious) return;
+		setPageIndex(pageIndex - 1);
 	};
 
 	const handleCreateItem = () => {
@@ -423,15 +495,19 @@ export function ItemsExplorer({
 		}
 	};
 
-	// Detect columns from items
-	const columns = Array.from(
-		items.reduce<Set<string>>((cols, item) => {
-			for (const key of Object.keys(item)) {
-				cols.add(key);
+	// Detect columns from all loaded items so the column set stays stable
+	// as you paginate or change sort.
+	const columns = useMemo(() => {
+		const set = new Set<string>();
+		for (const page of pages) {
+			for (const item of page) {
+				for (const key of Object.keys(item)) {
+					set.add(key);
+				}
 			}
-			return cols;
-		}, new Set()),
-	);
+		}
+		return Array.from(set);
+	}, [pages]);
 
 	// Put key columns first
 	const keyNames =
@@ -447,6 +523,14 @@ export function ItemsExplorer({
 		if (typeof value === "number" || typeof value === "boolean")
 			return String(value);
 		return JSON.stringify(value);
+	};
+
+	const formatCellDisplay = (value: unknown, col: string): string => {
+		if (timestampFormat === "human" && isTimestampColumn(col)) {
+			const human = formatHumanTimestamp(value);
+			if (human !== null) return human;
+		}
+		return formatCellValue(value);
 	};
 
 	// Column resizing
@@ -602,14 +686,7 @@ export function ItemsExplorer({
 						</div>
 					)}
 
-					<Button
-						size="sm"
-						className="gap-1.5"
-						onClick={() => {
-							setKeyStack([]);
-							performQuery();
-						}}
-					>
+					<Button size="sm" className="gap-1.5" onClick={() => performQuery()}>
 						<Search className="size-3.5" />
 						Run Query
 					</Button>
@@ -667,7 +744,13 @@ export function ItemsExplorer({
 				</div>
 			) : (
 				<div className="overflow-x-auto rounded-lg border">
-					<Table style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
+					<Table
+						style={{
+							tableLayout: "fixed",
+							width: "max-content",
+							minWidth: "100%",
+						}}
+					>
 						<TableHeader>
 							<TableRow>
 								<TableHead className="w-10" style={{ width: 40 }}>
@@ -677,27 +760,45 @@ export function ItemsExplorer({
 											selectedKeys.size === items.length && items.length > 0
 										}
 										onChange={handleToggleSelectAll}
-										className="size-4 rounded border-input accent-primary"
+										className="size-4 cursor-pointer rounded border-input accent-primary"
 									/>
 								</TableHead>
 								{sortedColumns.map((col) => (
 									<TableHead
 										key={col}
-										className="group relative overflow-hidden border-r border-border/50"
-										style={{ width: columnWidths[col] ?? 150, maxWidth: columnWidths[col] ?? 150 }}
+										className="group relative overflow-hidden border-r border-border/50 p-0"
+										style={{
+											width: columnWidths[col] ?? 150,
+											maxWidth: columnWidths[col] ?? 150,
+										}}
 									>
-										<span
-											className={cn(
-												"block truncate font-mono text-xs pr-2",
-												keyNames.includes(col) && "font-semibold",
-											)}
+										<button
+											type="button"
+											onClick={() => handleSort(col)}
+											className="flex h-10 w-full cursor-pointer items-center px-2 text-left hover:bg-muted/40"
 										>
-											{col}
-											{keyNames.includes(col) && " *"}
-										</span>
+											<span
+												className={cn(
+													"block flex-1 truncate font-mono text-xs",
+													sortColumn === col ? "pr-6" : "pr-3",
+													keyNames.includes(col) && "font-semibold",
+												)}
+											>
+												{col}
+												{keyNames.includes(col) && " *"}
+											</span>
+										</button>
+										{sortColumn === col && (
+											<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+												{sortDirection === "asc" ? (
+													<ChevronUp className="size-3.5" />
+												) : (
+													<ChevronDown className="size-3.5" />
+												)}
+											</span>
+										)}
 										{/* Resize handle */}
 										<div
-											role="separator"
 											className="absolute right-0 top-0 h-full w-1.5 -translate-x-px cursor-col-resize bg-transparent group-hover:bg-primary/30 active:bg-primary/50"
 											onMouseDown={(e) => handleResizeStart(col, e)}
 										/>
@@ -724,19 +825,24 @@ export function ItemsExplorer({
 											type="checkbox"
 											checked={selectedKeys.has(index)}
 											onChange={() => handleToggleSelect(index)}
-											className="size-4 rounded border-input accent-primary"
+											className="size-4 cursor-pointer rounded border-input accent-primary"
 										/>
 									</TableCell>
 									{sortedColumns.map((col) => (
 										<TableCell
 											key={col}
 											className="group/cell relative overflow-hidden font-mono text-xs"
-											style={{ width: columnWidths[col] ?? 150, maxWidth: columnWidths[col] ?? 150 }}
+											style={{
+												width: columnWidths[col] ?? 150,
+												maxWidth: columnWidths[col] ?? 150,
+											}}
 										>
-											<span className="block truncate pr-5">{formatCellValue(item[col])}</span>
+											<span className="block truncate pr-5">
+												{formatCellDisplay(item[col], col)}
+											</span>
 											<button
 												type="button"
-												className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/cell:opacity-100"
+												className="absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/cell:opacity-100"
 												onClick={(e) => {
 													e.stopPropagation();
 													const val = formatCellValue(item[col]);
@@ -761,20 +867,46 @@ export function ItemsExplorer({
 					variant="outline"
 					size="sm"
 					className="gap-1.5"
-					disabled={keyStack.length === 0}
+					disabled={!canGoPrevious}
 					onClick={handlePreviousPage}
 				>
 					<ChevronLeft className="size-3.5" />
 					Previous
 				</Button>
-				<span className="text-xs text-muted-foreground">
-					Page {keyStack.length + 1}
-				</span>
+				<div className="flex items-center gap-3">
+					<span className="text-xs text-muted-foreground">
+						Page {pageIndex + 1}
+					</span>
+					<div className="flex items-center gap-1.5">
+						<Label className="text-xs text-muted-foreground">Page size</Label>
+						<Select
+							value={String(pageSize)}
+							onValueChange={(v) => {
+								if (v === null) return;
+								setPageSize(Number(v) as (typeof PAGE_SIZES)[number]);
+								setPages([]);
+								setPageIndex(0);
+								setLastEvaluatedKey(undefined);
+							}}
+						>
+							<SelectTrigger className="h-8 w-20">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{PAGE_SIZES.map((s) => (
+									<SelectItem key={s} value={String(s)}>
+										{s}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				</div>
 				<Button
 					variant="outline"
 					size="sm"
 					className="gap-1.5"
-					disabled={!lastEvaluatedKey}
+					disabled={!canGoNext || loading}
 					onClick={handleNextPage}
 				>
 					Next

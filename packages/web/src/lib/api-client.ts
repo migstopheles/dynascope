@@ -223,12 +223,16 @@ export const api = {
 
 	// Tables
 	async listTables(): Promise<TableSummary[]> {
-		const res = await apiGet<{ tables: unknown[]; count: number }>("/api/tables");
+		const res = await apiGet<{ tables: unknown[]; count: number }>(
+			"/api/tables",
+		);
 		return res.tables.map((t) => normalizeKeys(t)) as TableSummary[];
 	},
 
 	async describeTable(name: string): Promise<TableDescription> {
-		const res = await apiGet<{ table: unknown }>(`/api/tables/${encodeURIComponent(name)}`);
+		const res = await apiGet<{ table: unknown }>(
+			`/api/tables/${encodeURIComponent(name)}`,
+		);
 		return normalizeKeys(res.table) as TableDescription;
 	},
 
@@ -248,7 +252,9 @@ export const api = {
 	): Promise<{ values: string[]; isSample: boolean }> {
 		const params = new URLSearchParams({ partitionKey });
 		if (index) params.set("index", index);
-		return apiGet(`/api/tables/${encodeURIComponent(table)}/sample-keys?${params}`);
+		return apiGet(
+			`/api/tables/${encodeURIComponent(table)}/sample-keys?${params}`,
+		);
 	},
 
 	scanItems(table: string, params?: ScanParams): Promise<ScanResult> {
