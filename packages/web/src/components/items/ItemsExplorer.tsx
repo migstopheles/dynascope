@@ -37,6 +37,11 @@ import type {
 	ScanResult,
 	TableDescription,
 } from "@/lib/api-client";
+import {
+	BINARY_TAG,
+	base64ByteLength,
+	isBinaryEnvelope,
+} from "@/lib/dynamo-json";
 import { cn } from "@/lib/utils";
 import {
 	ChevronDown,
@@ -522,6 +527,8 @@ export function ItemsExplorer({
 		if (typeof value === "string") return value;
 		if (typeof value === "number" || typeof value === "boolean")
 			return String(value);
+		if (isBinaryEnvelope(value))
+			return `«binary, ${base64ByteLength(value[BINARY_TAG])} bytes»`;
 		return JSON.stringify(value);
 	};
 
