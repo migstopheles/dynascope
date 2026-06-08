@@ -18,6 +18,7 @@ import {
 	ScanParamsSchema,
 	UpdateItemSchema,
 } from "../types/index.js";
+import { decodeBinaryValues, encodeBinaryValues } from "../utils/binary.js";
 import { handleAwsError } from "../utils/errors.js";
 
 type Env = {
@@ -72,8 +73,12 @@ itemRoutes.post("/:name/scan", async (c) => {
 	}
 
 	try {
-		const result = await scanItems(docClient, tableName, parsed.data);
-		return c.json(result);
+		const result = await scanItems(
+			docClient,
+			tableName,
+			decodeBinaryValues(parsed.data),
+		);
+		return c.json(encodeBinaryValues(result));
 	} catch (err) {
 		return handleAwsError(c, err);
 	}
@@ -95,8 +100,12 @@ itemRoutes.post("/:name/query", async (c) => {
 	}
 
 	try {
-		const result = await queryItems(docClient, tableName, parsed.data);
-		return c.json(result);
+		const result = await queryItems(
+			docClient,
+			tableName,
+			decodeBinaryValues(parsed.data),
+		);
+		return c.json(encodeBinaryValues(result));
 	} catch (err) {
 		return handleAwsError(c, err);
 	}
@@ -118,11 +127,15 @@ itemRoutes.post("/:name/items/get", async (c) => {
 	}
 
 	try {
-		const item = await getItem(docClient, tableName, parsed.data.key);
+		const item = await getItem(
+			docClient,
+			tableName,
+			decodeBinaryValues(parsed.data.key),
+		);
 		if (item === null) {
 			return c.json({ error: "Item not found" }, 404);
 		}
-		return c.json({ item });
+		return c.json({ item: encodeBinaryValues(item) });
 	} catch (err) {
 		return handleAwsError(c, err);
 	}
@@ -144,7 +157,7 @@ itemRoutes.put("/:name/items", async (c) => {
 	}
 
 	try {
-		await putItem(docClient, tableName, parsed.data.item);
+		await putItem(docClient, tableName, decodeBinaryValues(parsed.data.item));
 		return c.json({ success: true });
 	} catch (err) {
 		return handleAwsError(c, err);
@@ -169,7 +182,7 @@ itemRoutes.patch("/:name/items", async (c) => {
 	try {
 		// Merge key into item to ensure the key attributes are present
 		const mergedItem = { ...parsed.data.item, ...parsed.data.key };
-		await putItem(docClient, tableName, mergedItem);
+		await putItem(docClient, tableName, decodeBinaryValues(mergedItem));
 		return c.json({ success: true });
 	} catch (err) {
 		return handleAwsError(c, err);
@@ -192,7 +205,7 @@ itemRoutes.delete("/:name/items", async (c) => {
 	}
 
 	try {
-		await deleteItem(docClient, tableName, parsed.data.key);
+		await deleteItem(docClient, tableName, decodeBinaryValues(parsed.data.key));
 		return c.json({ success: true });
 	} catch (err) {
 		return handleAwsError(c, err);
@@ -218,7 +231,7 @@ itemRoutes.post("/:name/items/batch-delete", async (c) => {
 		const result = await batchDeleteItems(
 			docClient,
 			tableName,
-			parsed.data.keys,
+			decodeBinaryValues(parsed.data.keys),
 		);
 		return c.json(result);
 	} catch (err) {

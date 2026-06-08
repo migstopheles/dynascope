@@ -18,6 +18,39 @@ type DynamoValue =
 	| { BS: string[] };
 
 /**
+ * Binary (type `B`) attributes are delivered by the API as a tagged base64
+ * envelope (see packages/api/src/utils/binary.ts) so they survive the JSON
+ * round-trip rather than degrading into a byte-indexed object. In plain JSON a
+ * binary attribute appears as `{ "__dynascope_b64__": "<base64>" }`; in DynamoDB
+ * JSON it appears as `{ "B": "<base64>" }`.
+ *
+ * This tag MUST stay in sync with the API (BINARY_TAG in the api package).
+ */
+export const BINARY_TAG = "__dynascope_b64__";
+
+export function isBinaryEnvelope(
+	value: unknown,
+): value is Record<string, string> {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return false;
+	}
+	const keys = Object.keys(value);
+	return (
+		keys.length === 1 &&
+		keys[0] === BINARY_TAG &&
+		typeof (value as Record<string, unknown>)[BINARY_TAG] === "string"
+	);
+}
+
+/** Byte length of a base64 string, computed without decoding it. */
+export function base64ByteLength(b64: string): number {
+	const len = b64.length;
+	if (len === 0) return 0;
+	const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+	return Math.floor((len * 3) / 4) - padding;
+}
+
+/**
  * Convert a plain JS value to DynamoDB JSON format.
  */
 export function toDynamoValue(value: unknown): DynamoValue {
@@ -32,6 +65,9 @@ export function toDynamoValue(value: unknown): DynamoValue {
 	}
 	if (typeof value === "boolean") {
 		return { BOOL: value };
+	}
+	if (isBinaryEnvelope(value)) {
+		return { B: value[BINARY_TAG] };
 	}
 	if (Array.isArray(value)) {
 		// Check for typed sets (all strings, all numbers)
@@ -57,7 +93,7 @@ export function toDynamoValue(value: unknown): DynamoValue {
 export function fromDynamoValue(dv: DynamoValue): unknown {
 	if ("S" in dv) return dv.S;
 	if ("N" in dv) return Number(dv.N);
-	if ("B" in dv) return dv.B;
+	if ("B" in dv) return { [BINARY_TAG]: dv.B };
 	if ("BOOL" in dv) return dv.BOOL;
 	if ("NULL" in dv) return null;
 	if ("L" in dv) return dv.L.map(fromDynamoValue);
