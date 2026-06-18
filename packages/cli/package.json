@@ -1,6 +1,6 @@
 {
   "name": "dynascope",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A web-based management interface for Amazon DynamoDB",
   "type": "module",
   "license": "MIT",
