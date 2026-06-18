@@ -39,8 +39,10 @@ import type {
 } from "@/lib/api-client";
 import {
 	BINARY_TAG,
+	SET_TAG,
 	base64ByteLength,
 	isBinaryEnvelope,
+	isSetEnvelope,
 } from "@/lib/dynamo-json";
 import { cn } from "@/lib/utils";
 import {
@@ -529,6 +531,16 @@ export function ItemsExplorer({
 			return String(value);
 		if (isBinaryEnvelope(value))
 			return `«binary, ${base64ByteLength(value[BINARY_TAG])} bytes»`;
+		if (isSetEnvelope(value)) {
+			const { type, values } = value[SET_TAG];
+			const label =
+				type === "SS"
+					? "string set"
+					: type === "NS"
+						? "number set"
+						: "binary set";
+			return `«${label}, ${values.length} item${values.length === 1 ? "" : "s"}»`;
+		}
 		return JSON.stringify(value);
 	};
 
