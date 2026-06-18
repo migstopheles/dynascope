@@ -18,15 +18,29 @@ type DynamoValue =
 	| { BS: string[] };
 
 /**
- * Binary (type `B`) attributes are delivered by the API as a tagged base64
- * envelope (see packages/api/src/utils/binary.ts) so they survive the JSON
- * round-trip rather than degrading into a byte-indexed object. In plain JSON a
- * binary attribute appears as `{ "__dynascope_b64__": "<base64>" }`; in DynamoDB
- * JSON it appears as `{ "B": "<base64>" }`.
+ * Binary (type `B`) attributes and set attributes (`SS`/`NS`/`BS`) are values
+ * the API cannot serialise to JSON directly (a `Uint8Array` degrades into a
+ * byte-indexed object, a `Set` into `{}`). The API therefore delivers them as
+ * tagged envelopes (see packages/api/src/utils/dynamo-codec.ts) so they survive
+ * the round-trip.
  *
- * This tag MUST stay in sync with the API (BINARY_TAG in the api package).
+ * In plain JSON:
+ *   - binary appears as `{ "__dynascope_b64__": "<base64>" }`
+ *   - a set appears as `{ "__dynascope_set__": { "type": "SS"|"NS"|"BS", "values": [...] } }`
+ *
+ * In DynamoDB JSON these become `{ "B": "<base64>" }` and `{ "SS": [...] }` etc.
+ *
+ * These tags MUST stay in sync with the API (BINARY_TAG / SET_TAG in the api
+ * package).
  */
 export const BINARY_TAG = "__dynascope_b64__";
+export const SET_TAG = "__dynascope_set__";
+
+export type SetType = "SS" | "NS" | "BS";
+
+export interface SetEnvelope {
+	[SET_TAG]: { type: SetType; values: unknown[] };
+}
 
 export function isBinaryEnvelope(
 	value: unknown,
@@ -39,6 +53,24 @@ export function isBinaryEnvelope(
 		keys.length === 1 &&
 		keys[0] === BINARY_TAG &&
 		typeof (value as Record<string, unknown>)[BINARY_TAG] === "string"
+	);
+}
+
+export function isSetEnvelope(value: unknown): value is SetEnvelope {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return false;
+	}
+	const keys = Object.keys(value);
+	if (keys.length !== 1 || keys[0] !== SET_TAG) {
+		return false;
+	}
+	const inner = (value as Record<string, unknown>)[SET_TAG];
+	if (typeof inner !== "object" || inner === null) {
+		return false;
+	}
+	const { type, values } = inner as Record<string, unknown>;
+	return (
+		(type === "SS" || type === "NS" || type === "BS") && Array.isArray(values)
 	);
 }
 
@@ -69,12 +101,17 @@ export function toDynamoValue(value: unknown): DynamoValue {
 	if (isBinaryEnvelope(value)) {
 		return { B: value[BINARY_TAG] };
 	}
+	if (isSetEnvelope(value)) {
+		const { type, values } = value[SET_TAG];
+		if (type === "SS") return { SS: values as string[] };
+		if (type === "NS") return { NS: (values as number[]).map(String) };
+		// BS: members are binary envelopes; unwrap to base64 strings.
+		return {
+			BS: (values as Array<Record<string, string>>).map((v) => v[BINARY_TAG]),
+		};
+	}
 	if (Array.isArray(value)) {
-		// Check for typed sets (all strings, all numbers)
-		if (value.length > 0 && value.every((v) => typeof v === "string")) {
-			// Could be SS, but we can't distinguish from L of S without more context.
-			// Default to L for safety.
-		}
+		// A bare array is always a List; sets arrive as a SetEnvelope (handled above).
 		return { L: value.map(toDynamoValue) };
 	}
 	if (typeof value === "object") {
@@ -104,9 +141,16 @@ export function fromDynamoValue(dv: DynamoValue): unknown {
 		}
 		return obj;
 	}
-	if ("SS" in dv) return dv.SS;
-	if ("NS" in dv) return dv.NS.map(Number);
-	if ("BS" in dv) return dv.BS;
+	if ("SS" in dv) return { [SET_TAG]: { type: "SS", values: dv.SS } };
+	if ("NS" in dv)
+		return { [SET_TAG]: { type: "NS", values: dv.NS.map(Number) } };
+	if ("BS" in dv)
+		return {
+			[SET_TAG]: {
+				type: "BS",
+				values: dv.BS.map((b) => ({ [BINARY_TAG]: b })),
+			},
+		};
 	return null;
 }
 
