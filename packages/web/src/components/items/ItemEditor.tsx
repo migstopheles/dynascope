@@ -184,7 +184,7 @@ export function ItemEditor({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-2xl">
+			<DialogContent className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col sm:max-w-[95vw]">
 				<DialogHeader>
 					<DialogTitle>
 						{mode === "create" ? "Create Item" : "Edit Item"}
@@ -223,9 +223,9 @@ export function ItemEditor({
 				</div>
 
 				{/* Monaco editor */}
-				<div className="overflow-hidden rounded-md border">
+				<div className="min-h-0 flex-1 overflow-hidden rounded-md border">
 					<Editor
-						height="400px"
+						height="100%"
 						language="json"
 						theme={isDark ? "vs-dark" : "vs-light"}
 						value={editorValue}
