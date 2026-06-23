@@ -1,6 +1,6 @@
 {
   "name": "dynascope",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A web-based management interface for Amazon DynamoDB",
   "type": "module",
   "license": "MIT",
@@ -24,7 +24,10 @@
   "bin": {
     "dynascope": "./dist/index.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "dev": "tsx watch --inspect src/index.ts --endpoint http://localhost:8000",
     "build": "tsup"
